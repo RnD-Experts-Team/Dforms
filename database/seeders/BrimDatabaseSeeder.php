@@ -5,37 +5,38 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 use Faker\Factory as Faker;
 
 class BrimDatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1) Seed system/preproduction data first (do NOT duplicate these tables)
+        // Run preprod/system seeder only if needed
         $needsPreprod =
-        DB::table('languages')->count() === 0 ||
-        DB::table('field_types')->count() === 0 ||
-        DB::table('input_rules')->count() === 0 ||
-        DB::table('actions')->count() === 0;
+            DB::table('languages')->count() === 0 ||
+            DB::table('field_types')->count() === 0 ||
+            DB::table('input_rules')->count() === 0 ||
+            DB::table('actions')->count() === 0;
 
-    if ($needsPreprod) {
-        $this->call(SuperadminPreProductionSeeder::class);
-    }
+        if ($needsPreprod) {
+            $this->call(SuperadminPreProductionSeeder::class);
+        }
 
-    $faker = Faker::create();
+        DB::disableQueryLog();
+        $faker = Faker::create();
+
+        // Optional: huge speedup in dev
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
 
         DB::transaction(function () use ($faker) {
 
             // ----------------------------
-            // Load "static" seeded stuff
+            // Load system data
             // ----------------------------
-            $languages   = DB::table('languages')->get();
-            $fieldTypes  = DB::table('field_types')->get();
-            $inputRules  = DB::table('input_rules')->get();
-            $actions     = DB::table('actions')->get();
+            $languages  = DB::table('languages')->get();
+            $fieldTypes = DB::table('field_types')->get();
+            $actions    = DB::table('actions')->get();
 
-            // Map field_type_id => [input_rule_id,...] via pivot input_rule_field_types
             $ruleByFieldType = [];
             $pivot = DB::table('input_rule_field_types')->get();
             foreach ($pivot as $p) {
@@ -43,8 +44,7 @@ class BrimDatabaseSeeder extends Seeder
             }
 
             // ----------------------------
-            // Ensure we have local dev users
-            // (IDs are mirrored in prod, but OK for dev)
+            // Ensure local dev users
             // ----------------------------
             $existingUserCount = DB::table('users')->count();
             if ($existingUserCount < 20) {
@@ -65,7 +65,7 @@ class BrimDatabaseSeeder extends Seeder
             $users = DB::table('users')->pluck('id');
 
             // ----------------------------
-            // Categories
+            // Categories (bulk)
             // ----------------------------
             $categoryCount = 30;
             $catRows = [];
@@ -81,16 +81,17 @@ class BrimDatabaseSeeder extends Seeder
 
             // ----------------------------
             // Forms + Versions + Stages + Sections + Fields
+            // (still some insertGetId needed for graph, but tighter)
             // ----------------------------
-            $formsPerCategory = 12; // 30 * 12 = 360 forms
-            $maxExtraVersions = 3;  // each form gets 1..4 versions
-            $stagesPerVersion = [2, 5]; // min/max
+            $formsPerCategory = 12; // 360 forms
+            $maxExtraVersions = 3;  // 1..4 versions
+            $stagesPerVersion = [2, 5];
             $sectionsPerStage = [1, 4];
             $fieldsPerSection = [3, 12];
 
-            $formIds = [];
             foreach ($categoryIds as $categoryId) {
                 for ($f = 0; $f < $formsPerCategory; $f++) {
+
                     $formId = DB::table('forms')->insertGetId([
                         'name' => ucfirst($faker->unique()->words(3, true)),
                         'category_id' => $faker->boolean(90) ? $categoryId : null,
@@ -98,13 +99,10 @@ class BrimDatabaseSeeder extends Seeder
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
-                    $formIds[] = $formId;
 
-                    // create 1..(1 + maxExtraVersions) versions
                     $versionsCount = 1 + $faker->numberBetween(0, $maxExtraVersions);
                     $publishedIndex = $faker->numberBetween(0, $versionsCount - 1);
 
-                    $versionIds = [];
                     for ($v = 0; $v < $versionsCount; $v++) {
                         $status = ($v === $publishedIndex && !$faker->boolean(10)) ? 'published' : 'draft';
 
@@ -112,31 +110,36 @@ class BrimDatabaseSeeder extends Seeder
                             'form_id' => $formId,
                             'version_number' => $v,
                             'status' => $status,
-                            'published_at' => $status === 'published' ? now()->subDays($faker->numberBetween(0, 100)) : null,
+                            'published_at' => $status === 'published'
+                                ? now()->subDays($faker->numberBetween(0, 100))
+                                : null,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
-                        $versionIds[] = $versionId;
 
-                        // optional translations for non-default languages
+                        // translations (bulk per version)
+                        $fvTrans = [];
                         foreach ($languages as $lang) {
                             if (!$lang->is_default && $faker->boolean(40)) {
-                                DB::table('form_version_translations')->insert([
+                                $fvTrans[] = [
                                     'form_version_id' => $versionId,
                                     'language_id' => $lang->id,
                                     'name' => ucfirst($faker->words(3, true))." ({$lang->code})",
                                     'created_at' => now(),
                                     'updated_at' => now(),
-                                ]);
+                                ];
                             }
+                        }
+                        if ($fvTrans) {
+                            DB::table('form_version_translations')->insert($fvTrans);
                         }
 
                         // ----- stages -----
                         $stageCount = $faker->numberBetween($stagesPerVersion[0], $stagesPerVersion[1]);
-
                         $stageIds = [];
+
                         for ($s = 0; $s < $stageCount; $s++) {
-                            $stageId = DB::table('stages')->insertGetId([
+                            $stageIds[] = DB::table('stages')->insertGetId([
                                 'form_version_id' => $versionId,
                                 'name' => $s === 0 ? 'Initial Stage' : ucfirst($faker->words(2, true)),
                                 'is_initial' => ($s === 0),
@@ -144,12 +147,10 @@ class BrimDatabaseSeeder extends Seeder
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
-                            $stageIds[] = $stageId;
 
-                            // stage access rules (mostly later stages)
                             if ($s > 0 && $faker->boolean(35)) {
                                 DB::table('stage_access_rules')->insert([
-                                    'stage_id' => $stageId,
+                                    'stage_id' => $stageIds[$s],
                                     'allowed_users' => null,
                                     'allowed_roles' => null,
                                     'allowed_permissions' => null,
@@ -160,19 +161,20 @@ class BrimDatabaseSeeder extends Seeder
                                 ]);
                             }
 
-                            // ----- sections per stage -----
+                            // ----- sections + fields -----
                             $secCount = $faker->numberBetween($sectionsPerStage[0], $sectionsPerStage[1]);
+
                             for ($sec = 0; $sec < $secCount; $sec++) {
                                 $sectionId = DB::table('sections')->insertGetId([
-                                    'stage_id' => $stageId,
+                                    'stage_id' => $stageIds[$s],
                                     'name' => ucfirst($faker->words(2, true)),
                                     'visibility_condition' => null,
                                     'created_at' => now(),
                                     'updated_at' => now(),
                                 ]);
 
-                                // ----- fields per section -----
                                 $fldCount = $faker->numberBetween($fieldsPerSection[0], $fieldsPerSection[1]);
+
                                 for ($fld = 0; $fld < $fldCount; $fld++) {
                                     $fieldType = $fieldTypes->random();
                                     $label = ucfirst($faker->words(3, true));
@@ -189,10 +191,11 @@ class BrimDatabaseSeeder extends Seeder
                                         'updated_at' => now(),
                                     ]);
 
-                                    // maybe add translations
+                                    // field translations (bulk per field)
+                                    $fTrans = [];
                                     foreach ($languages as $lang) {
                                         if (!$lang->is_default && $faker->boolean(25)) {
-                                            DB::table('field_translations')->insert([
+                                            $fTrans[] = [
                                                 'field_id' => $fieldId,
                                                 'language_id' => $lang->id,
                                                 'label' => $label." ({$lang->code})",
@@ -200,38 +203,44 @@ class BrimDatabaseSeeder extends Seeder
                                                 'default_value' => null,
                                                 'created_at' => now(),
                                                 'updated_at' => now(),
-                                            ]);
+                                            ];
                                         }
                                     }
+                                    if ($fTrans) {
+                                        DB::table('field_translations')->insert($fTrans);
+                                    }
 
-                                    // attach 0..2 field_rules based on pivot compatibility
+                                    // field_rules (bulk per field)
                                     $ruleIds = $ruleByFieldType[$fieldType->id] ?? [];
                                     if (!empty($ruleIds) && $faker->boolean(55)) {
                                         $howMany = $faker->numberBetween(1, min(2, count($ruleIds)));
                                         $pick = $faker->randomElements($ruleIds, $howMany);
 
+                                        $frRows = [];
                                         foreach ($pick as $ruleId) {
-                                            DB::table('field_rules')->insert([
+                                            $frRows[] = [
                                                 'field_id' => $fieldId,
                                                 'input_rule_id' => $ruleId,
                                                 'rule_props' => null,
                                                 'rule_condition' => null,
                                                 'created_at' => now(),
                                                 'updated_at' => now(),
-                                            ]);
+                                            ];
                                         }
+                                        DB::table('field_rules')->insert($frRows);
                                     }
                                 }
                             }
                         }
 
-                        // ----- stage transitions (linear mostly) -----
+                        // ----- stage transitions (bulk) -----
+                        $transitionIds = [];
                         for ($i = 0; $i < count($stageIds); $i++) {
                             $from = $stageIds[$i];
                             $to   = $stageIds[$i + 1] ?? null;
                             $toComplete = $to === null;
 
-                            $transitionId = DB::table('stage_transitions')->insertGetId([
+                            $transitionIds[] = DB::table('stage_transitions')->insertGetId([
                                 'form_version_id' => $versionId,
                                 'from_stage_id' => $from,
                                 'to_stage_id' => $to,
@@ -241,20 +250,28 @@ class BrimDatabaseSeeder extends Seeder
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
+                        }
 
-                            // attach 0..2 actions to each transition
-                            if ($actions->count() > 0 && $faker->boolean(60)) {
-                                $cnt = $faker->numberBetween(1, 2);
-                                $actionPick = $actions->random($cnt);
-                                foreach ($actionPick as $act) {
-                                    DB::table('stage_transition_actions')->insert([
-                                        'stage_transition_id' => $transitionId,
-                                        'action_id' => $act->id,
-                                        'action_props' => json_encode([]),
-                                        'created_at' => now(),
-                                        'updated_at' => now(),
-                                    ]);
+                        // transition actions (bulk)
+                        if ($actions->count() > 0) {
+                            $taRows = [];
+                            foreach ($transitionIds as $tid) {
+                                if ($faker->boolean(60)) {
+                                    $cnt = $faker->numberBetween(1, 2);
+                                    $actionPick = $actions->random($cnt);
+                                    foreach ($actionPick as $act) {
+                                        $taRows[] = [
+                                            'stage_transition_id' => $tid,
+                                            'action_id' => $act->id,
+                                            'action_props' => json_encode([]),
+                                            'created_at' => now(),
+                                            'updated_at' => now(),
+                                        ];
+                                    }
                                 }
+                            }
+                            if ($taRows) {
+                                DB::table('stage_transition_actions')->insert($taRows);
                             }
                         }
                     }
@@ -262,14 +279,14 @@ class BrimDatabaseSeeder extends Seeder
             }
 
             // ----------------------------
-            // Entries + Entry Values
-            // ONLY for published versions
+            // Entries + Entry Values (SUPER FAST)
             // ----------------------------
             $publishedVersions = DB::table('form_versions')
                 ->where('status', 'published')
                 ->get();
 
             foreach ($publishedVersions as $ver) {
+
                 $verStages = DB::table('stages')
                     ->where('form_version_id', $ver->id)
                     ->orderBy('id')
@@ -277,56 +294,117 @@ class BrimDatabaseSeeder extends Seeder
 
                 if ($verStages->isEmpty()) continue;
 
-                $initialStage = $verStages->first();
-                $allStageIds  = $verStages->pluck('id')->values();
+                $allStageIds = $verStages->pluck('id')->values();
 
-                // how many entries per version
+                // Preload all fields for this version grouped by stage
+                $fieldsByStage = [];
+                $fields = DB::table('fields')
+                    ->join('sections', 'fields.section_id', '=', 'sections.id')
+                    ->whereIn('sections.stage_id', $allStageIds)
+                    ->select('fields.id', 'fields.field_type_id', 'sections.stage_id')
+                    ->get();
+
+                foreach ($fields as $f) {
+                    $fieldsByStage[$f->stage_id][] = [
+                        'id' => $f->id,
+                        'field_type_id' => $f->field_type_id,
+                    ];
+                }
+
+                // Build cumulative fields up to each stage index
+                $cumulativeFieldsByIndex = [];
+                $running = [];
+                foreach ($allStageIds as $idx => $sid) {
+                    foreach (($fieldsByStage[$sid] ?? []) as $fi) {
+                        $running[] = $fi;
+                    }
+                    $cumulativeFieldsByIndex[$idx] = $running;
+                }
+
+                // Bulk insert entries
                 $entryCount = $faker->numberBetween(80, 220);
+                $entriesRows = [];
 
                 for ($e = 0; $e < $entryCount; $e++) {
                     $randomStageIndex = $faker->numberBetween(0, $allStageIds->count() - 1);
                     $currentStageId   = $allStageIds[$randomStageIndex];
 
-                    $isComplete = ($randomStageIndex === $allStageIds->count() - 1) && $faker->boolean(70);
-
-                    $entryId = DB::table('entries')->insertGetId([
+                    $entriesRows[] = [
                         'form_version_id' => $ver->id,
                         'current_stage_id' => $currentStageId,
                         'public_identifier' => (string) Str::uuid(),
-                        'is_complete' => $isComplete,
+                        'is_complete' => ($randomStageIndex === $allStageIds->count() - 1) && $faker->boolean(70),
                         'is_considered' => $faker->boolean(30),
                         'created_by_user_id' => $users->random(),
                         'created_at' => now()->subDays($faker->numberBetween(0, 120)),
                         'updated_at' => now()->subDays($faker->numberBetween(0, 40)),
-                    ]);
+                        '_stage_index' => $randomStageIndex, // helper only
+                    ];
+                }
 
-                    // create values for fields in stages up to current stage
-                    $stagesUpToCurrent = $allStageIds->slice(0, $randomStageIndex + 1);
+                $insertedEntryMetas = [];
 
-                    $fieldIds = DB::table('fields')
-                        ->join('sections', 'fields.section_id', '=', 'sections.id')
-                        ->join('stages', 'sections.stage_id', '=', 'stages.id')
-                        ->whereIn('stages.id', $stagesUpToCurrent)
-                        ->select('fields.id', 'fields.field_type_id')
-                        ->get();
+                foreach (array_chunk($entriesRows, 500) as $chunk) {
+                    $toInsert = array_map(function ($r) {
+                        unset($r['_stage_index']);
+                        return $r;
+                    }, $chunk);
 
-                    foreach ($fieldIds as $finfo) {
-                        DB::table('entry_values')->insert([
+                    DB::table('entries')->insert($toInsert);
+
+                    // Pull back last inserted IDs for this version
+                    $lastIds = DB::table('entries')
+                        ->where('form_version_id', $ver->id)
+                        ->orderByDesc('id')
+                        ->limit(count($chunk))
+                        ->pluck('id')
+                        ->reverse()
+                        ->values();
+
+                    foreach ($chunk as $i => $row) {
+                        $insertedEntryMetas[] = [
+                            'id' => $lastIds[$i],
+                            'stage_index' => $row['_stage_index'],
+                        ];
+                    }
+                }
+
+                // Bulk insert entry_values
+                $valuesBuffer = [];
+
+                foreach ($insertedEntryMetas as $em) {
+                    $entryId = $em['id'];
+                    $stageIndex = $em['stage_index'];
+
+                    $fieldsUpToStage = $cumulativeFieldsByIndex[$stageIndex] ?? [];
+
+                    foreach ($fieldsUpToStage as $fi) {
+                        $valuesBuffer[] = [
                             'entry_id' => $entryId,
-                            'field_id' => $finfo->id,
-                            'value' => $this->fakeValueForFieldType($faker, $fieldTypes, $finfo->field_type_id),
+                            'field_id' => $fi['id'],
+                            'value' => $this->fakeValueForFieldType($faker, $fieldTypes, $fi['field_type_id']),
                             'created_at' => now(),
                             'updated_at' => now(),
-                        ]);
+                        ];
                     }
+
+                    if (count($valuesBuffer) >= 5000) {
+                        DB::table('entry_values')->insert($valuesBuffer);
+                        $valuesBuffer = [];
+                    }
+                }
+
+                if ($valuesBuffer) {
+                    DB::table('entry_values')->insert($valuesBuffer);
                 }
             }
 
             // ----------------------------
-            // Notifications
+            // Notifications (bulk)
             // ----------------------------
             $userIds = DB::table('users')->pluck('id');
             $notifRows = [];
+
             foreach ($userIds as $uid) {
                 $n = $faker->numberBetween(5, 25);
                 for ($i = 0; $i < $n; $i++) {
@@ -343,11 +421,13 @@ class BrimDatabaseSeeder extends Seeder
                     ];
                 }
             }
-            // Insert in chunks to avoid memory spikes
+
             foreach (array_chunk($notifRows, 1000) as $chunk) {
                 DB::table('notifications')->insert($chunk);
             }
         });
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 
     private function fakeValueForFieldType($faker, $fieldTypes, int $fieldTypeId): string
@@ -357,7 +437,8 @@ class BrimDatabaseSeeder extends Seeder
         return match ($name) {
             'Text Input', 'Text Area' => $faker->sentence(),
             'Email Input' => $faker->unique()->safeEmail(),
-            'Number Input', 'Currency Input', 'Percentage Input', 'Slider', 'Rating' => (string) $faker->numberBetween(0, 100),
+            'Number Input', 'Currency Input', 'Percentage Input', 'Slider', 'Rating'
+                => (string) $faker->numberBetween(0, 100),
             'Phone Input' => $faker->phoneNumber(),
             'Date Input' => $faker->date('Y-m-d'),
             'Time Input' => $faker->time('H:i'),
