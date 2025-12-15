@@ -165,6 +165,10 @@ class EndUserFormService
 /**
  * Build stage structure with complete details
  */
+/**
+ * Build stage structure with complete details
+ * FIXED: Send ALL fields/sections with visibility conditions - let frontend handle visibility
+ */
 private function buildStageStructureWithDetails(Stage $stage, array $existingValues, int $languageId): array
 {
     // Load relationships if not loaded
@@ -181,11 +185,9 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
             $visibilityCondition = json_decode($visibilityCondition, true);
         }
 
-        // Check section visibility
-        if (!$this->isSectionVisible($visibilityCondition, $existingValues)) {
-            continue;
-        }
-
+        // FIXED: Don't filter sections - send ALL with visibility conditions
+        // Frontend will handle visibility based on conditions
+        
         $fields = [];
         foreach ($section->fields as $field) {
             // Load field relationships
@@ -201,10 +203,8 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
                 $fieldVisibilityCondition = json_decode($fieldVisibilityCondition, true);
             }
 
-            // Check field visibility
-            if (!$this->isFieldVisible($fieldVisibilityCondition, $existingValues)) {
-                continue;
-            }
+            // FIXED: Don't filter fields - send ALL with visibility conditions
+            // Frontend will handle visibility based on conditions
 
             // Get field translation
             $fieldTranslation = $field->translations->first();
@@ -224,7 +224,7 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
                 'helper_text' => $fieldTranslation ? $fieldTranslation->helper_text : $field->helper_text,
                 'default_value' => $defaultValue,
                 'current_value' => $existingValues[$field->id] ?? null,
-                'visibility_condition' => $fieldVisibilityCondition,
+                'visibility_condition' => $fieldVisibilityCondition, // Frontend will use this
                 'rules' => $field->rules->map(function($rule) {
                     $ruleProps = $rule->rule_props;
                     if (is_string($ruleProps) && json_decode($ruleProps) !== null) {
@@ -243,15 +243,14 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
             ];
         }
 
-        if (!empty($fields)) {
-            $sections[] = [
-                'section_id' => $section->id,
-                'section_name' => $section->name,
-                'section_order' => $section->order,
-                'visibility_condition' => $visibilityCondition,
-                'fields' => $fields,
-            ];
-        }
+        // FIXED: Always add section, even if empty - with visibility condition
+        $sections[] = [
+            'section_id' => $section->id,
+            'section_name' => $section->name,
+            'section_order' => $section->order,
+            'visibility_condition' => $visibilityCondition, // Frontend will use this
+            'fields' => $fields,
+        ];
     }
 
     // Build access rule details
@@ -276,11 +275,12 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
         'stage_id' => $stage->id,
         'stage_name' => $stage->name,
         'is_initial' => $stage->is_initial,
-        'visibility_condition' => $stageVisibilityCondition,
+        'visibility_condition' => $stageVisibilityCondition, // Frontend will use this
         'access_rule' => $accessRuleDetails,
         'sections' => $sections,
     ];
 }
+
 
     /**
      * Submit initial stage of a form
