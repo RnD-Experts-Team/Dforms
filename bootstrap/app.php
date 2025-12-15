@@ -3,7 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\AuthCheckingForToken;
+use App\Http\Middleware\{AuthCheckingForToken, OptionalAuthCheckingForToken};
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth.verify' => AuthCheckingForToken::class,
+            'auth.optional' => OptionalAuthCheckingForToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

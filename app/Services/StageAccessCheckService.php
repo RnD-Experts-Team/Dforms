@@ -27,22 +27,26 @@ class StageAccessCheckService
 
         $accessRule = $stage->accessRule;
 
-        // If no access rule exists, deny access by default (security first)
+        // CHANGED: If no access rule exists, allow access (public by default)
         if (!$accessRule) {
-            return false;
-        }
-
-        // For initial stage with no conditions, it's public
-        if ($stage->is_initial && 
-            empty($accessRule->allowed_users) && 
-            empty($accessRule->allowed_roles) && 
-            empty($accessRule->allowed_permissions) && 
-            !$accessRule->allow_authenticated_users && 
-            !$accessRule->email_field_id) {
             return true;
         }
 
-        // If guest user but rule requires authentication
+        // CHANGED: Check if access rule has any restrictions at all
+        $hasRestrictions = $accessRule->allow_authenticated_users
+            || !empty($accessRule->allowed_users)
+            || !empty($accessRule->allowed_roles)
+            || !empty($accessRule->allowed_permissions)
+            || $accessRule->email_field_id;
+
+        // If no restrictions are set, allow everyone (including guests)
+        if (!$hasRestrictions) {
+            return true;
+        }
+
+        // From here on, we have restrictions - check them in order
+
+        // If guest user but restrictions exist, deny access
         if (!$user) {
             return false;
         }
@@ -52,7 +56,7 @@ class StageAccessCheckService
             return true;
         }
 
-        // Check specific users - FIXED: properly handle JSON string from database
+        // Check specific users - properly handle JSON string from database
         if (!empty($accessRule->allowed_users)) {
             $allowedUsers = is_array($accessRule->allowed_users) 
                 ? $accessRule->allowed_users 
@@ -63,7 +67,7 @@ class StageAccessCheckService
             }
         }
 
-        // Check roles - FIXED: properly handle JSON string from database
+        // Check roles - properly handle JSON string from database
         if (!empty($accessRule->allowed_roles)) {
             $allowedRoles = is_array($accessRule->allowed_roles)
                 ? $accessRule->allowed_roles
@@ -76,7 +80,7 @@ class StageAccessCheckService
             }
         }
 
-        // Check permissions - FIXED: properly handle JSON string from database
+        // Check permissions - properly handle JSON string from database
         if (!empty($accessRule->allowed_permissions)) {
             $allowedPermissions = is_array($accessRule->allowed_permissions)
                 ? $accessRule->allowed_permissions
@@ -96,7 +100,7 @@ class StageAccessCheckService
             }
         }
 
-        // If none of the conditions match, deny access
+        // If restrictions exist but none match, deny access
         return false;
     }
 
@@ -158,6 +162,8 @@ class StageAccessCheckService
         foreach ($publishedVersions as $version) {
             $initialStage = $version->stages->first();
 
+            // CHANGED: Only check access if initial stage exists
+            // Allows access by default if stage is found
             if ($initialStage && $this->canUserAccessStage($initialStage, $user)) {
                 $accessibleFormIds[] = $version->form_id;
             }
