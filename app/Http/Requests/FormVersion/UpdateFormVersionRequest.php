@@ -28,9 +28,9 @@ class UpdateFormVersionRequest extends FormRequest
 
             // ========== STAGE ACCESS RULES ==========
             'stages.*.access_rule' => 'nullable|array',
-            'stages.*.access_rule.allowed_users' => 'nullable|array',
-            'stages.*.access_rule.allowed_roles' => 'nullable|array',
-            'stages.*.access_rule.allowed_permissions' => 'nullable|array',
+            'stages.*.access_rule.allowed_users' => 'nullable|json',
+            'stages.*.access_rule.allowed_roles' => 'nullable|json',
+            'stages.*.access_rule.allowed_permissions' => 'nullable|json',
             'stages.*.access_rule.allow_authenticated_users' => 'nullable|boolean',
             'stages.*.access_rule.email_field_id' => 'nullable', // Can be integer or string (fake ID)
 
@@ -58,7 +58,7 @@ class UpdateFormVersionRequest extends FormRequest
             'stages.*.sections.*.fields.*.rules' => 'nullable|array',
             'stages.*.sections.*.fields.*.rules.*.id' => 'nullable', // Can be integer or string (fake ID)
             'stages.*.sections.*.fields.*.rules.*.input_rule_id' => 'required|integer|exists:input_rules,id',
-            'stages.*.sections.*.fields.*.rules.*.rule_props' => 'nullable|array',
+            'stages.*.sections.*.fields.*.rules.*.rule_props' => 'nullable|json',
             'stages.*.sections.*.fields.*.rules.*.rule_condition' => 'nullable', // Can contain fake IDs
 
 
@@ -76,7 +76,7 @@ class UpdateFormVersionRequest extends FormRequest
             'stage_transitions.*.actions' => 'nullable|array',
             'stage_transitions.*.actions.*.id' => 'nullable', // Can be integer or string (fake ID)
             'stage_transitions.*.actions.*.action_id' => 'required|integer|exists:actions,id',
-            'stage_transitions.*.actions.*.action_props' => 'nullable|array',
+            'stage_transitions.*.actions.*.action_props' => 'nullable', // CHANGED: removed |json to accept both array and json string
         ];
     }
 
@@ -96,9 +96,9 @@ class UpdateFormVersionRequest extends FormRequest
 
             // ========== STAGE ACCESS RULES ==========
             'stages.*.access_rule.array' => 'Stage access rule must be an array.',
-            'stages.*.access_rule.allowed_users.array' => 'Allowed users must be an array.',
-            'stages.*.access_rule.allowed_roles.array' => 'Allowed roles must be an array.',
-            'stages.*.access_rule.allowed_permissions.array' => 'Allowed permissions must be an array.',
+            'stages.*.access_rule.allowed_users.json' => 'Allowed users must be valid JSON.',
+            'stages.*.access_rule.allowed_roles.json' => 'Allowed roles must be valid JSON.',
+            'stages.*.access_rule.allowed_permissions.json' => 'Allowed permissions must be valid JSON.',
             'stages.*.access_rule.allow_authenticated_users.boolean' => 'Allow authenticated users must be a boolean.',
 
 
@@ -132,7 +132,7 @@ class UpdateFormVersionRequest extends FormRequest
             'stages.*.sections.*.fields.*.rules.*.input_rule_id.required' => 'Input rule ID is required for each field rule.',
             'stages.*.sections.*.fields.*.rules.*.input_rule_id.integer' => 'Input rule ID must be an integer.',
             'stages.*.sections.*.fields.*.rules.*.input_rule_id.exists' => 'Selected input rule does not exist.',
-            'stages.*.sections.*.fields.*.rules.*.rule_props.array' => 'Rule props must be an array.',
+            'stages.*.sections.*.fields.*.rules.*.rule_props.json' => 'Rule props must be valid JSON.',
 
 
             // ========== STAGE TRANSITIONS ==========
@@ -149,7 +149,6 @@ class UpdateFormVersionRequest extends FormRequest
             'stage_transitions.*.actions.*.action_id.required' => 'Action ID is required for each transition action.',
             'stage_transitions.*.actions.*.action_id.integer' => 'Action ID must be an integer.',
             'stage_transitions.*.actions.*.action_id.exists' => 'Selected action does not exist.',
-            'stage_transitions.*.actions.*.action_props.array' => 'Action props must be an array.',
         ];
     }
 }
