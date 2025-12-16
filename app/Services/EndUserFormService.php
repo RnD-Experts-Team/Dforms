@@ -37,47 +37,66 @@ class EndUserFormService
      * Get list of available forms for end user based on their access
      */
     public function getAvailableFormsForUser(?int $userId, ?int $languageId = null): array
-    {
-        $user = $userId ? User::find($userId) : null;
+{
+    $user = $userId ? User::find($userId) : null;
 
-        // Determine language to use
-        if (!$languageId) {
-            $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
-        }
+    // Determine language to use
+    if (!$languageId) {
+        $languageId = $user?->default_language_id
+            ?? Language::where('is_default', true)->value('id');
+    }
 
-        // Get accessible form IDs based on stage access rules
-        $accessibleFormIds = $this->accessCheckService->getAccessibleFormIds($user);
+    // Get accessible form IDs based on stage access rules
+    $accessibleFormIds = $this->accessCheckService->getAccessibleFormIds($user);
 
-        // Get published forms that are not archived and user has access to
-        $forms = Form::whereIn('id', $accessibleFormIds)
-            ->where('is_archived', false)
-            ->with(['formVersions' => function($query) {
+    // Get forms user can access + category + latest published version
+    $forms = Form::whereIn('id', $accessibleFormIds)
+        ->where('is_archived', false)
+        ->with([
+            'category:id,name', // adjust selected fields as needed
+            'formVersions' => function ($query) {
                 $query->where('status', 'published')
-                      ->orderBy('version_number', 'desc')
-                      ->limit(1);
-            }])
-            ->get();
+                    ->orderBy('version_number', 'desc')
+                    ->limit(1);
+            },
+        ])
+        ->get();
 
-        $result = [];
-        foreach ($forms as $form) {
-            $version = $form->formVersions->first();
-            if (!$version) continue;
+    // Group result by category
+    $grouped = []; // [category_id => ['category' => ..., 'forms' => [...]]]
 
-            // Get translation if exists
-            $translation = $version->translations()
-                ->where('language_id', $languageId)
-                ->first();
+    foreach ($forms as $form) {
+        $version = $form->formVersions->first();
+        if (!$version) continue;
 
-            $result[] = [
-                'form_id' => $form->id,
-                'form_version_id' => $version->id,
-                'name' => $translation ? $translation->name : $form->name,
-                'version_number' => $version->version_number,
+        $translation = $version->translations()
+            ->where('language_id', $languageId)
+            ->first();
+
+        $categoryId = $form->category?->id ?? 0;
+        $categoryName = $form->category?->name ?? 'Uncategorized';
+
+        if (!isset($grouped[$categoryId])) {
+            $grouped[$categoryId] = [
+                'category_id' => $categoryId,
+                'category_name' => $categoryName,
+                'forms' => [],
             ];
         }
 
-        return $result;
+        $grouped[$categoryId]['forms'][] = [
+            'form_id' => $form->id,
+            'form_version_id' => $version->id,
+            'name' => $translation?->name ?? $form->name,
+            'version_number' => $version->version_number,
+        ];
     }
+
+    // Optional: sort categories / forms if you want
+    // ksort($grouped);
+
+    return array_values($grouped);
+}
 
     /**
      * Get form structure for initial submission
