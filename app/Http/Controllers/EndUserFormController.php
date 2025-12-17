@@ -144,27 +144,37 @@ class EndUserFormController extends Controller
      * Submit later stage
      */
     public function submitLaterStage(SubmitLaterStageRequest $request): JsonResponse
-    {
-        try {
-            // FIXED: Pass correct parameters to service
-            $result = $this->endUserFormService->submitLaterStage(
-                $request->input('public_identifier'),
-                $request->input('field_values'),
-                $request->input('stage_transition_id'),
-                Auth::id()
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Later stage submitted successfully.',
-                'data' => $result,
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit later stage.',
-                'error' => $e->getMessage(),
-            ], 400);
+{
+    try {
+        // Transform field_values from array to keyed object
+        $fieldValuesArray = $request->input('field_values', []);
+        $fieldValues = [];
+        
+        foreach ($fieldValuesArray as $fieldData) {
+            if (isset($fieldData['field_id']) && isset($fieldData['value'])) {
+                $fieldValues[$fieldData['field_id']] = $fieldData['value'];
+            }
         }
+        
+        $result = $this->endUserFormService->submitLaterStage(
+            $request->input('public_identifier'),
+            $fieldValues,  // Pass transformed data
+            $request->input('stage_transition_id'),
+            Auth::id()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Later stage submitted successfully.',
+            'data' => $result,
+        ], 200);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to submit later stage.',
+            'error' => $e->getMessage(),
+        ], 400);
     }
+}
+
 }
