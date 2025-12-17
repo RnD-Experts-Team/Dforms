@@ -76,31 +76,41 @@ class EndUserFormController extends Controller
      * Submit initial stage
      */
     public function submitInitialStage(SubmitInitialStageRequest $request): JsonResponse
-    {
-        try {
-            // FIXED: Pass correct parameters to service
-            $result = $this->endUserFormService->submitInitialStage(
-                $request->input('form_version_id'),
-                $request->input('field_values'),
-                $request->input('stage_transition_id'), // FIXED: Added transition ID
-                Auth::id()
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Initial stage submitted successfully.',
-                'data' => $result,
-            ], 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit initial stage.',
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),      // ADD THIS
-                'line' => $e->getLine(),
-            ], 400);
+{
+    try {
+        // Transform field_values from array to keyed object
+        $fieldValuesArray = $request->input('field_values', []);
+        $fieldValues = [];
+        
+        foreach ($fieldValuesArray as $fieldData) {
+            if (isset($fieldData['field_id']) && isset($fieldData['value'])) {
+                $fieldValues[$fieldData['field_id']] = $fieldData['value'];
+            }
         }
+        
+        $result = $this->endUserFormService->submitInitialStage(
+            $request->input('form_version_id'),
+            $fieldValues,  // Pass transformed data
+            $request->input('stage_transition_id'),
+            Auth::id()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Initial stage submitted successfully.',
+            'data' => $result,
+        ], 201);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to submit initial stage.',
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ], 400);
     }
+}
+
 
     /**
      * GET /api/enduser/entries/{publicIdentifier}
