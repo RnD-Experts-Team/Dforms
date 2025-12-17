@@ -17,7 +17,7 @@ class FieldValidationService
      * @param array $allValues All form values for conditional rules
      * @return array Validation errors if any
      */
-    public function validateSubmissionValues(array $fieldValues, int $stageId, array $allValues = []): array
+   public function validateSubmissionValues(array $fieldValues, int $stageId, array $allValues = []): array
 {
     $errors = [];
     
@@ -29,7 +29,7 @@ class FieldValidationService
             continue;
         }
         
-        // ADDED: Check if fieldType exists
+        // Check if fieldType exists
         if (!$field->fieldType) {
             $errors[$fieldId] = ["Field type not configured"];
             continue;
@@ -42,7 +42,7 @@ class FieldValidationService
         
         // Validate each rule attached to this field
         foreach ($field->rules as $fieldRule) {
-            // ADDED: Check if inputRule exists
+            // Check if inputRule exists
             if (!$fieldRule->inputRule) {
                 continue;
             }
@@ -51,11 +51,19 @@ class FieldValidationService
                 continue; // Skip inactive conditional rules
             }
             
+            // FIXED: Convert rule_props from JSON string to array
+            $ruleProps = $fieldRule->rule_props;
+            if (is_string($ruleProps)) {
+                $ruleProps = json_decode($ruleProps, true) ?? [];
+            } elseif (!is_array($ruleProps)) {
+                $ruleProps = [];
+            }
+            
             $ruleErrors = $this->validateSingleRule(
                 $value,
                 $field->fieldType->name,
                 $fieldRule->inputRule->name,
-                $fieldRule->rule_props ?? []
+                $ruleProps  // Now guaranteed to be an array
             );
             
             if (!empty($ruleErrors)) {
@@ -66,6 +74,7 @@ class FieldValidationService
     
     return $errors;
 }
+
 
     /**
      * Check if field is visible based on visibility conditions
