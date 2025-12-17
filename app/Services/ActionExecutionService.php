@@ -273,9 +273,9 @@ class ActionExecutionService
     /**
      * Replace variables in string with entry data
      */
-    private function replaceVariables(string $text, Entry $entry): string
+   private function replaceVariables(string $text, Entry $entry): string
 {
-    $entry->load(['formVersion.form', 'entryValues.field', 'creator']);
+    $entry->load(['formVersion.form', 'entryValues.field', 'creator', 'currentStage']);
 
     // Generate entry link using the existing route
     $entryLink = url("/enduser/entries/{$entry->public_identifier}");
@@ -290,7 +290,7 @@ class ActionExecutionService
         '{{user_email}}'        => $creator?->email ?? '',
         '{{entry_id}}'          => $entry->id,
         '{{public_identifier}}' => $entry->public_identifier,
-        '{{current_stage}}'     => $entry->currentStage->name ?? '',
+        '{{current_stage}}'     => $entry->currentStage?->name ?? '',
         '{{created_at}}'        => $entry->created_at->format('Y-m-d H:i:s'),
     ];
 
@@ -303,6 +303,7 @@ class ActionExecutionService
 
     return str_replace(array_keys($variables), array_values($variables), $text);
 }
+
 
     
     /**
