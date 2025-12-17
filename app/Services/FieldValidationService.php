@@ -18,44 +18,55 @@ class FieldValidationService
      * @return array Validation errors if any
      */
     public function validateSubmissionValues(array $fieldValues, int $stageId, array $allValues = []): array
-    {
-        $errors = [];
+{
+    $errors = [];
+    
+    foreach ($fieldValues as $fieldId => $value) {
+        $field = Field::with(['fieldType', 'rules.inputRule', 'section'])->find($fieldId);
         
-        foreach ($fieldValues as $fieldId => $value) {
-            $field = Field::with(['fieldType', 'rules.inputRule', 'section'])->find($fieldId);
-            
-            if (!$field) {
-                $errors[$fieldId] = ["Field not found"];
+        if (!$field) {
+            $errors[$fieldId] = ["Field not found"];
+            continue;
+        }
+        
+        // ADDED: Check if fieldType exists
+        if (!$field->fieldType) {
+            $errors[$fieldId] = ["Field type not configured"];
+            continue;
+        }
+        
+        // Check if field is visible
+        if (!$this->isFieldVisible($field, $allValues)) {
+            continue; // Skip validation for hidden fields
+        }
+        
+        // Validate each rule attached to this field
+        foreach ($field->rules as $fieldRule) {
+            // ADDED: Check if inputRule exists
+            if (!$fieldRule->inputRule) {
                 continue;
             }
             
-            // Check if field is visible
-            if (!$this->isFieldVisible($field, $allValues)) {
-                continue; // Skip validation for hidden fields
+            if (!$this->isRuleActive($fieldRule, $allValues)) {
+                continue; // Skip inactive conditional rules
             }
             
-            // Validate each rule attached to this field
-            foreach ($field->rules as $fieldRule) {
-                if (!$this->isRuleActive($fieldRule, $allValues)) {
-                    continue; // Skip inactive conditional rules
-                }
-                
-                $ruleErrors = $this->validateSingleRule(
-                    $value,
-                    $field->fieldType->name,
-                    $fieldRule->inputRule->name,
-                    $fieldRule->rule_props ?? []
-                );
-                
-                if (!empty($ruleErrors)) {
-                    $errors[$fieldId] = array_merge($errors[$fieldId] ?? [], $ruleErrors);
-                }
+            $ruleErrors = $this->validateSingleRule(
+                $value,
+                $field->fieldType->name,
+                $fieldRule->inputRule->name,
+                $fieldRule->rule_props ?? []
+            );
+            
+            if (!empty($ruleErrors)) {
+                $errors[$fieldId] = array_merge($errors[$fieldId] ?? [], $ruleErrors);
             }
         }
-        
-        return $errors;
     }
     
+    return $errors;
+}
+
     /**
      * Check if field is visible based on visibility conditions
      */
