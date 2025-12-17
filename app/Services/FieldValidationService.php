@@ -308,11 +308,42 @@ private function validateMax($value, string $fieldType, array $props): array
     }
     
     private function validateRegex($value, array $props): array
-    {
-        $pattern = $props['pattern'] ?? '';
-        $valid = preg_match($pattern, $value);
-        return ['valid' => (bool)$valid, 'message' => $valid ? '' : 'Format is invalid.'];
+{
+    $pattern = $props['pattern'] ?? '';
+    
+    // Skip if no pattern provided
+    if (empty($pattern)) {
+        return ['valid' => true, 'message' => ''];
     }
+    
+    // Skip validation for non-string values
+    if (!is_string($value)) {
+        return ['valid' => true, 'message' => ''];
+    }
+    
+    // Check if pattern has delimiters, if not add them
+    if (!preg_match('/^[\/\#\~\@\!\%\|\{\}\[\]]/', $pattern)) {
+        $pattern = '/' . $pattern . '/';
+    }
+    
+    // Validate the pattern itself before using it
+    set_error_handler(function() {});
+    $isValidPattern = @preg_match($pattern, '') !== false;
+    restore_error_handler();
+    
+    if (!$isValidPattern) {
+        // Invalid regex pattern - skip validation or return error
+        return ['valid' => true, 'message' => '']; // Skip invalid patterns
+    }
+    
+    $valid = (bool) preg_match($pattern, $value);
+    
+    return [
+        'valid' => $valid, 
+        'message' => $valid ? '' : 'Format is invalid.'
+    ];
+}
+
     
     private function validateIn($value, array $props): array
     {
