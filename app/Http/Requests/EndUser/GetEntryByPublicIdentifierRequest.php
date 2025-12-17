@@ -11,6 +11,13 @@ class GetEntryByPublicIdentifierRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'public_identifier' => $this->route('public_identifier'),
+        ]);
+    }
+
     public function rules(): array
     {
         return [
