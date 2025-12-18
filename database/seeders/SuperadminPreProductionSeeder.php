@@ -84,6 +84,7 @@ class SuperadminPreProductionSeeder extends Seeder
             'Signature Pad',
             'Location Picker',
             'Address Input',
+            'Voice Record'
         ];
 
         foreach ($fieldTypes as $fieldType) {
@@ -196,7 +197,7 @@ class SuperadminPreProductionSeeder extends Seeder
                 'name' => 'max_file_size',
                 'description' => 'Maximum file size in kilobytes (e.g., 30MB = 30720)',
                 'is_public' => true,
-                'applies_to' => [13, 14, 15, 16],
+                'applies_to' => [13, 14, 15, 16, 28],
             ],
             [
                 'name' => 'min_file_size',

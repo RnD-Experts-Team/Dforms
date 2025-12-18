@@ -121,6 +121,12 @@ class FieldValueHandlerService
         return json_encode([(string)$value]);
     }
     
+    private function handleVoiceRecord($value): string
+{
+    return $this->handleFileStorage($value, 'voice-recordings');
+}
+
+
     private function handleFileUpload($value): string
     {
         return $this->handleFileStorage($value);
