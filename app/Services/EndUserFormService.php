@@ -239,7 +239,7 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
                 'field_type_id' => $field->field_type_id,
                 'field_type' => $field->fieldType->name,
                 'label' => $fieldTranslation ? $fieldTranslation->label : $field->label,
-                'placeholder' => $field->placeholder,
+                'placeholder' => $fieldTranslation ? $fieldTranslation->placeholder : $field->placeholder,
                 'helper_text' => $fieldTranslation ? $fieldTranslation->helper_text : $field->helper_text,
                 'default_value' => $defaultValue,
                 'current_value' => $existingValues[$field->id] ?? null,
