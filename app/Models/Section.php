@@ -28,4 +28,9 @@ class Section extends Model
     {
         return $this->hasMany(Field::class);
     }
+
+    public function translations(): HasMany
+{
+    return $this->hasMany(SectionTranslation::class);
+}
 }

@@ -6,7 +6,9 @@ use App\Models\FormVersion;
 use App\Models\Language;
 use App\Models\FormVersionTranslation;
 use App\Models\FieldTranslation;
-use App\Models\Field;
+use App\Models\StageTranslation;
+use App\Models\SectionTranslation;
+use App\Models\StageTransitionTranslation;
 use Illuminate\Support\Facades\DB;
 
 class TranslationService
@@ -18,7 +20,7 @@ class TranslationService
     {
         // Validate that the target language is NOT the default language
         $language = Language::findOrFail($languageId);
-        
+
         if ($language->is_default) {
             throw new \Exception('Cannot create translations for the default language.');
         }
@@ -26,21 +28,84 @@ class TranslationService
         $formVersion = FormVersion::with([
             'form',
             'stages.sections.fields',
-            'translations' => function($q) use ($languageId) {
+            'stageTransitions',
+            'translations' => function ($q) use ($languageId) {
                 $q->where('language_id', $languageId);
             }
         ])->findOrFail($formVersionId);
 
-        // Load field translations for the specified language
-        $formVersion->load(['stages.sections.fields.translations' => function($q) use ($languageId) {
-            $q->where('language_id', $languageId);
-        }]);
+        // Load translations for the specified language
+        $formVersion->load([
+            'stages.translations' => function ($q) use ($languageId) {
+                $q->where('language_id', $languageId);
+            },
+            'stages.sections.translations' => function ($q) use ($languageId) {
+                $q->where('language_id', $languageId);
+            },
+            'stages.sections.fields.translations' => function ($q) use ($languageId) {
+                $q->where('language_id', $languageId);
+            },
+            'stageTransitions.translations' => function ($q) use ($languageId) {
+                $q->where('language_id', $languageId);
+            },
+        ]);
 
         // Get existing form version translation
         $formTranslation = $formVersion->translations->first();
         $translatedFormName = $formTranslation ? $formTranslation->name : '';
 
-        // Get all fields from all stages/sections with their translations
+        // Stage translations (NEW)
+        $stages = [];
+        foreach ($formVersion->stages as $stage) {
+            $stageTranslation = $stage->translations->first();
+
+            $stages[] = [
+                'stage_id' => $stage->id,
+                'original' => [
+                    'name' => $stage->name,
+                ],
+                'translated' => [
+                    'name' => $stageTranslation ? $stageTranslation->name : '',
+                ],
+            ];
+        }
+
+        // Section translations (NEW)
+        $sections = [];
+        foreach ($formVersion->stages as $stage) {
+            foreach ($stage->sections as $section) {
+                $sectionTranslation = $section->translations->first();
+
+                $sections[] = [
+                    'section_id' => $section->id,
+                    'stage_id' => $stage->id,
+                    'original' => [
+                        'name' => $section->name,
+                    ],
+                    'translated' => [
+                        'name' => $sectionTranslation ? $sectionTranslation->name : '',
+                    ],
+                ];
+            }
+        }
+
+        // Transition label translations (NEW)
+        $transitions = [];
+        foreach ($formVersion->stageTransitions as $transition) {
+            $transitionTranslation = $transition->translations->first();
+
+            $transitions[] = [
+                'stage_transition_id' => $transition->id,
+                'original' => [
+                    'label' => $transition->label,
+                ],
+                'translated' => [
+                    'label' => $transitionTranslation ? $transitionTranslation->label : '',
+                ],
+            ];
+        }
+
+        // Get all fields from all stages/sections with their translations (EXISTING)
         $fields = [];
         foreach ($formVersion->stages as $stage) {
             foreach ($stage->sections as $section) {
@@ -82,6 +147,13 @@ class TranslationService
                 'original' => $formVersion->form->name,
                 'translated' => $translatedFormName,
             ],
+
+            // NEW keys (added without changing existing ones)
+            'stages' => $stages,
+            'sections' => $sections,
+            'transitions' => $transitions,
+
+            // existing
             'fields' => $fields,
         ];
     }
@@ -99,7 +171,7 @@ class TranslationService
 
             // Validate that the target language is NOT the default language
             $language = Language::findOrFail($languageId);
-            
+
             if ($language->is_default) {
                 throw new \Exception('Cannot save translations for the default language.');
             }
@@ -117,7 +189,52 @@ class TranslationService
                 );
             }
 
-            // Save or update field translations
+            // NEW: Save or update stage translations
+            if (isset($data['stage_translations'])) {
+                foreach ($data['stage_translations'] as $stageTranslation) {
+                    StageTranslation::updateOrCreate(
+                        [
+                            'stage_id' => $stageTranslation['stage_id'],
+                            'language_id' => $languageId,
+                        ],
+                        [
+                            'name' => $stageTranslation['name'] ?? '',
+                        ]
+                    );
+                }
+            }
+
+            // NEW: Save or update section translations
+            if (isset($data['section_translations'])) {
+                foreach ($data['section_translations'] as $sectionTranslation) {
+                    SectionTranslation::updateOrCreate(
+                        [
+                            'section_id' => $sectionTranslation['section_id'],
+                            'language_id' => $languageId,
+                        ],
+                        [
+                            'name' => $sectionTranslation['name'] ?? '',
+                        ]
+                    );
+                }
+            }
+
+            // NEW: Save or update transition translations
+            if (isset($data['transition_translations'])) {
+                foreach ($data['transition_translations'] as $transitionTranslation) {
+                    StageTransitionTranslation::updateOrCreate(
+                        [
+                            'stage_transition_id' => $transitionTranslation['stage_transition_id'],
+                            'language_id' => $languageId,
+                        ],
+                        [
+                            'label' => $transitionTranslation['label'] ?? '',
+                        ]
+                    );
+                }
+            }
+
+            // Save or update field translations (existing)
             if (isset($data['field_translations'])) {
                 foreach ($data['field_translations'] as $fieldTranslation) {
                     $fieldId = $fieldTranslation['field_id'];
@@ -176,7 +293,7 @@ class TranslationService
     {
         // Validate that the target language is NOT the default language
         $language = Language::findOrFail($languageId);
-        
+
         if ($language->is_default) {
             throw new \Exception('Cannot delete translations for the default language.');
         }
@@ -189,22 +306,56 @@ class TranslationService
                 ->where('language_id', $languageId)
                 ->delete();
 
-            // Get all field IDs for this form version
-            $formVersion = FormVersion::with('stages.sections.fields')->findOrFail($formVersionId);
+            // Load structure for IDs
+            $formVersion = FormVersion::with([
+                'stages.sections.fields',
+                'stageTransitions'
+            ])->findOrFail($formVersionId);
+
+            $stageIds = [];
+            $sectionIds = [];
             $fieldIds = [];
-            
             foreach ($formVersion->stages as $stage) {
+                $stageIds[] = $stage->id;
+
                 foreach ($stage->sections as $section) {
+                    $sectionIds[] = $section->id;
+
                     foreach ($section->fields as $field) {
                         $fieldIds[] = $field->id;
                     }
                 }
             }
 
-            // Delete field translations
-            FieldTranslation::whereIn('field_id', $fieldIds)
-                ->where('language_id', $languageId)
-                ->delete();
+            $transitionIds = $formVersion->stageTransitions->pluck('id')->toArray();
+
+            // Delete stage translations (NEW)
+            if (!empty($stageIds)) {
+                StageTranslation::whereIn('stage_id', $stageIds)
+                    ->where('language_id', $languageId)
+                    ->delete();
+            }
+
+            // Delete section translations (NEW)
+            if (!empty($sectionIds)) {
+                SectionTranslation::whereIn('section_id', $sectionIds)
+                    ->where('language_id', $languageId)
+                    ->delete();
+            }
+
+            // Delete transition translations (NEW)
+            if (!empty($transitionIds)) {
+                StageTransitionTranslation::whereIn('stage_transition_id', $transitionIds)
+                    ->where('language_id', $languageId)
+                    ->delete();
+            }
+
+            // Delete field translations (existing)
+            if (!empty($fieldIds)) {
+                FieldTranslation::whereIn('field_id', $fieldIds)
+                    ->where('language_id', $languageId)
+                    ->delete();
+            }
 
             DB::commit();
 

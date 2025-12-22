@@ -50,4 +50,9 @@ class Stage extends Model
     {
         return $this->hasMany(Entry::class, 'current_stage_id');
     }
+
+    public function translations(): HasMany
+{
+    return $this->hasMany(StageTranslation::class);
+}
 }

@@ -41,4 +41,9 @@ class StageTransition extends Model
     {
         return $this->hasMany(StageTransitionAction::class);
     }
+
+public function translations(): HasMany
+{
+    return $this->hasMany(StageTransitionTranslation::class);
+}
 }
