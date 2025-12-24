@@ -205,12 +205,12 @@ class SuperadminPreProductionSeeder extends Seeder
                 'is_public' => true,
                 'applies_to' => [13, 14, 15, 16],
             ],
-            [
-                'name' => 'dimensions',
-                'description' => 'Image must meet dimension requirements (width, height, min_width, etc.)',
-                'is_public' => true,
-                'applies_to' => [14], // Image Upload
-            ],
+            // [
+            //     'name' => 'dimensions',
+            //     'description' => 'Image must meet dimension requirements (width, height, min_width, etc.)',
+            //     'is_public' => true,
+            //     'applies_to' => [14], // Image Upload
+            // ],
             [
                 'name' => 'between',
                 'description' => 'Value must be between two values (for numbers or string length)',

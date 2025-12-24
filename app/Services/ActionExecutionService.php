@@ -275,7 +275,7 @@ class ActionExecutionService
      */
    private function replaceVariables(string $text, Entry $entry): string
 {
-    $entry->load(['formVersion.form', 'entryValues.field', 'creator', 'currentStage']);
+    $entry->load(['formVersion.form', 'values.field', 'creator', 'currentStage']);
 
     // Generate entry link using the existing route
     $entryLink = url("/enduser/entries/{$entry->public_identifier}");
@@ -284,7 +284,7 @@ class ActionExecutionService
     $creator = $entry->creator ?? Auth::user();
 
     $variables = [
-        '{{entry_link}}'        => $entryLink,
+        '{{entry_link}}'        => $entryLink, 
         '{{form_name}}'         => $entry->formVersion->form->name,
         '{{user_name}}'         => $creator?->name ?? 'Unknown',
         '{{user_email}}'        => $creator?->email ?? '',
@@ -295,7 +295,7 @@ class ActionExecutionService
     ];
 
     // Add field values as variables
-    foreach ($entry->entryValues as $entryValue) {
+    foreach ($entry->values as $entryValue) {
         $fieldLabel = $entryValue->field->label;
         $fieldKey = '{{field_' . str_replace(' ', '_', strtolower($fieldLabel)) . '}}';
         $variables[$fieldKey] = $entryValue->value;

@@ -19,7 +19,7 @@ class EntryService
      */
     public function getEntriesList(array $filters)
     {
-        $query = Entry::with(['currentStage', 'createdByUser', 'entryValues.field'])
+        $query = Entry::with(['currentStage', 'creator', 'values.field'])
             ->where('form_version_id', $filters['form_version_id']);
         
         // Filter by date range (submission or latest update, whichever is latest)
@@ -58,8 +58,8 @@ class EntryService
         return Entry::with([
             'formVersion.stages.sections.fields',
             'currentStage',
-            'entryValues.field',
-            'createdByUser'
+            'values.field',
+            'creator'
         ])->findOrFail($id);
     }
 
@@ -71,8 +71,8 @@ class EntryService
         return Entry::with([
             'formVersion.stages.sections.fields',
             'currentStage',
-            'entryValues.field',
-            'createdByUser'
+            'values.field',
+            'creator'
         ])->where('public_identifier', $publicIdentifier)->firstOrFail();
     }
 
